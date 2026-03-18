@@ -5,7 +5,7 @@ import com.chatbot.chatbot.dto.Request.RegisterRequest;
 import com.chatbot.chatbot.dto.Response.AuthResponse;
 import com.chatbot.chatbot.jwt.JwtUtil;
 import com.chatbot.chatbot.model.RefreshToken;
-import com.chatbot.chatbot.model.Role;
+import com.chatbot.chatbot.model.enumList.Role;
 import com.chatbot.chatbot.model.User;
 import com.chatbot.chatbot.repository.RefreshTokenRepository;
 import com.chatbot.chatbot.repository.UserRepository;

@@ -1,5 +1,6 @@
 package com.chatbot.chatbot.model;
 
+import com.chatbot.chatbot.model.enumList.Role;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
