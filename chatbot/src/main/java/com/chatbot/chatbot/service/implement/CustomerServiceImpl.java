@@ -21,7 +21,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerResponse createCustomer(CustomerRequest request, String username) {
-        User user = userRepository.findByUsername(username)
+        User user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Can't find the user:" + username));
 
         if (customerRepository.findByUser(user).isPresent()) {
