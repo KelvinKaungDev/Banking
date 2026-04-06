@@ -42,7 +42,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerResponse getMyCustomer(String username) {
-        User user = userRepository.findByUsername(username)
+        User user = userRepository.findByEmail(username)  // ← was findByUsername
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
         Customer customer = customerRepository.findByUser(user)

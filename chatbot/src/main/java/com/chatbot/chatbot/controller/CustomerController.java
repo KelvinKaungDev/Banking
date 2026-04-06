@@ -11,6 +11,7 @@ import javax.validation.Valid;
 import java.security.Principal;
 
 @RestController
+@RequestMapping("/api/customers")
 @RequiredArgsConstructor
 public class CustomerController {
     private final CustomerService customerService;

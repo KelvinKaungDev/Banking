@@ -1,7 +1,9 @@
 package com.chatbot.chatbot.service.implement;
 
+import com.chatbot.chatbot.dto.Request.TransactionHistoryRequest;
 import com.chatbot.chatbot.dto.Request.TransactionRequest;
 import com.chatbot.chatbot.dto.Request.TransferRequest;
+import com.chatbot.chatbot.dto.Response.TransactionHistoryResponse;
 import com.chatbot.chatbot.dto.Response.TransactionResponse;
 import com.chatbot.chatbot.model.Account;
 import com.chatbot.chatbot.model.Transaction;
@@ -9,11 +11,22 @@ import com.chatbot.chatbot.model.enumList.AccountStatus;
 import com.chatbot.chatbot.model.enumList.TransactionStatus;
 import com.chatbot.chatbot.model.enumList.TransactionType;
 import com.chatbot.chatbot.repository.AccountRepository;
+import com.chatbot.chatbot.repository.CustomerRepository;
 import com.chatbot.chatbot.repository.TransactionRepository;
+import com.chatbot.chatbot.service.TransactionExportService;
 import com.chatbot.chatbot.service.TransactionService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +34,8 @@ public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
+    private final CustomerRepository customerRepository;
+    private final TransactionExportService transactionExportService;
 
     @Override
     @Transactional
@@ -109,65 +124,49 @@ public class TransactionServiceImpl implements TransactionService {
         return mapToResponse(transactionRepository.save(transaction));
     }
 
+    @Override
+    public List<TransactionResponse> getTransactionsByAccount(String accountNumber) {
+        List<Transaction> sent     = transactionRepository.findByFromAccountAccountNumber(accountNumber);
+        List<Transaction> received = transactionRepository.findByToAccountAccountNumber(accountNumber);
 
-//    @Override
-//    public TransactionResponse transfer(TransferRequest request) {
-//
-//        // Step 1 - Find both accounts
-//        Account fromAccount = accountRepository
-//                .findByAccountNumber(request.getFromAccountNumber())
-//                .orElseThrow(() -> new RuntimeException("Sender account not found: "
-//                        + request.getFromAccountNumber()));
-//
-//        Account toAccount = accountRepository
-//                .findByAccountNumber(request.getToAccountNumber())
-//                .orElseThrow(() -> new RuntimeException("Receiver account not found: "
-//                        + request.getToAccountNumber()));
-//
-//        // Step 2 - Check sender is ACTIVE
-//        if (fromAccount.getStatus() != AccountStatus.ACTIVE) {
-//            throw new RuntimeException("Sender account is not active");
-//        }
-//
-//        // Step 3 - Check receiver is ACTIVE
-//        if (toAccount.getStatus() != AccountStatus.ACTIVE) {
-//            throw new RuntimeException("Receiver account is not active");
-//        }
-//
-//        // Step 4 - Cannot transfer to same account
-//        if (fromAccount.getAccountNumber().equals(toAccount.getAccountNumber())) {
-//            throw new RuntimeException("Cannot transfer to the same account");
-//        }
-//
-//        // Step 5 - Check sufficient balance
-//        if (fromAccount.getBalance().compareTo(request.getAmount()) < 0) {
-//            throw new RuntimeException("Insufficient balance! Current balance: "
-//                    + fromAccount.getBalance());
-//        }
-//
-//        // Step 6 - Deduct from sender
-//        fromAccount.setBalance(fromAccount.getBalance().subtract(request.getAmount()));
-//        accountRepository.save(fromAccount);
-//
-//        if (true) throw new RuntimeException("SIMULATED CRASH after deducting sender!");
-//
-//        // Step 7 - Add to receiver
-//        toAccount.setBalance(toAccount.getBalance().add(request.getAmount()));
-//        accountRepository.save(toAccount);
-//
-//        // Step 8 - Record transaction
-//        Transaction transaction = Transaction.builder()
-//                .referenceNumber(generateReferenceNumber())
-//                .transactionType(TransactionType.TRANSFER)
-//                .status(TransactionStatus.SUCCESS)
-//                .amount(request.getAmount())
-//                .description(request.getDescription())
-//                .fromAccount(fromAccount)   // ← sender
-//                .toAccount(toAccount)       // ← receiver
-//                .build();
-//
-//        return mapToResponse(transactionRepository.save(transaction));
-//    }
+        return Stream.concat(sent.stream(), received.stream())
+                .sorted(Comparator.comparing(Transaction::getCreatedAt).reversed())
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+
+    @Override
+    public TransactionHistoryResponse getTransactionHistory(
+            Long customerId,
+            TransactionHistoryRequest request) {
+
+        // Validate customer exists
+        customerRepository.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found: " + customerId));
+
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
+
+        Page<Transaction> page = transactionRepository.findByCustomerId(
+                customerId,
+                request.getStartDate(),
+                request.getEndDate(),
+                pageable
+        );
+
+        List<TransactionResponse> responses = page.getContent()
+                .stream()
+                .map(this::mapToResponse)   // reuses your existing private method
+                .collect(Collectors.toList());
+
+        return TransactionHistoryResponse.builder()
+                .transactions(responses)
+                .currentPage(page.getNumber())
+                .totalPages(page.getTotalPages())
+                .totalElements(page.getTotalElements())
+                .size(page.getSize())
+                .build();
+    }
 
     @Override
     @Transactional
@@ -224,5 +223,12 @@ public class TransactionServiceImpl implements TransactionService {
                         ? transaction.getToAccount().getAccountNumber() : null)
                 .createdAt(transaction.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    public byte[] exportTransactionsToPdf(Long customerId,
+                                          LocalDateTime startDate,
+                                          LocalDateTime endDate) throws Exception {
+        return transactionExportService.exportToPdf(customerId, startDate, endDate);
     }
 }
